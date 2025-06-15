@@ -1,6 +1,6 @@
 {
-  "name": "SuperMarket PWA",
-  "short_name": "SuperMarket",
+  "name": "Controle de Vendas app",
+  "short_name": "app vendas",
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#f5f5f5",
