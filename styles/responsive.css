@@ -1,0 +1,75 @@
+/* Responsividade */
+@media (max-width: 768px) {
+    .logo h1 {
+        font-size: 1.2rem;
+    }
+    
+    .btn span {
+        display: none;
+    }
+    
+    .btn i {
+        margin-right: 0;
+    }
+    
+    .products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .logo h1 {
+        font-size: 1.1rem;
+    }
+    
+    .products-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .tabs {
+        font-size: 0.9rem;
+    }
+    
+    .tab {
+        padding: 8px 5px;
+    }
+    
+    .cart-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .cart-item-actions {
+        width: 100%;
+        margin-top: 10px;
+        justify-content: space-between;
+    }
+    
+    .order-actions {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .action-button {
+        width: 100%;
+        margin-right: 0 !important;
+    }
+    .btn-delete {
+    background: var(--danger);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* Atualize o modal-footer para espaço entre os botões */
+.modal-footer {
+    padding: 15px 20px;
+    background: #f9f9f9;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+}
