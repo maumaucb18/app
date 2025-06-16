@@ -2,6 +2,7 @@
 class Orders {
     constructor(database) {
         this.db = database;
+        this.printer = window.ThermalPrinter;
     }
 
     async loadOrders() {
@@ -61,103 +62,240 @@ class Orders {
         });
     }
 
-    printOrder(orderId) {
-        this.db.getAllOrders().then(orders => {
+   
+      async printOrder(orderId) {
+        try {
+            const orders = await this.db.getAllOrders();
             const order = orders.find(o => o.id === orderId);
-            if (order) {
-                // Criar conteúdo formatado para impressão
-                let printContent = `
-                    <style>
-                        @media print {
-                            body { font-family: Arial, sans-serif; }
-                            .print-header { text-align: center; margin-bottom: 20px; }
-                            .print-title { font-size: 18px; font-weight: bold; }
-                            .print-subtitle { font-size: 14px; margin-bottom: 10px; }
-                            .print-table { width: 100%; border-collapse: collapse; }
-                            .print-table th { text-align: left; border-bottom: 1px solid #000; padding: 5px; }
-                            .print-table td { padding: 5px; }
-                            .print-total { font-weight: bold; margin-top: 10px; text-align: right; }
-                            .print-footer { margin-top: 20px; text-align: center; font-size: 12px; }
-                        }
-                    </style>
-                    <div class="print-header">
-                        <div class="print-title">Cupom de Retirada</div>
-                        <div class="print-subtitle">Pedido #${order.id}</div>
-                        <div class="print-subtitle">${new Date(order.date).toLocaleString('pt-BR')}</div>
-                    </div>
-                    <table class="print-table">
-                        <thead>
-                            <tr>
-                                <th>Item</th>
-                                <th>Qtd</th>
-                                <th>Preço Unit.</th>
-                                <th>Subtotal</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                // Adicionar cada item discriminado
-                order.items.forEach(item => {
-                    printContent += `
-                        <tr>
-                            <td>${item.name}</td>
-                            <td>${item.quantity}</td>
-                            <td>R$ ${item.price.toFixed(2)}</td>
-                            <td>R$ ${(item.price * item.quantity).toFixed(2)}</td>
-                        </tr>
-                    `;
-                });
-
-                // Adicionar total
-                printContent += `
-                        </tbody>
-                    </table>
-                    <div class="print-total">Total: R$ ${order.total.toFixed(2)}</div>
-                    <div class="print-footer">Obrigado pela preferência!</div>
-                `;
-
-                // Abrir janela de impressão
-                const printWindow = window.open('', '_blank');
-                printWindow.document.write(printContent);
-                printWindow.document.close();
-
-                // Aguardar o carregamento para impressão
-                printWindow.onload = function () {
-                    printWindow.print();
-                    printWindow.close();
-                };
+            
+            if (!order) {
+                UI.showToast('Pedido não encontrado!');
+                return;
             }
-        });
+            
+            // Obter observações do campo de texto
+            const notes = document.getElementById('receiptNotes').value || '';
+            
+            // Obter impressora configurada
+            const savedPrinter = localStorage.getItem('selectedPrinter');
+            const paperSize = localStorage.getItem('paperSize') || 80;
+            
+            if (!savedPrinter) {
+                UI.showToast('Configure uma impressora primeiro!');
+                return;
+            }
+            
+            // Conectar à impressora Bluetooth
+            await this.printer.connectPrinter(savedPrinter);
+            
+            // Configurar papel
+            this.printer.setPaperSize(parseInt(paperSize));
+            
+            // Determinar largura máxima baseada no papel
+            const maxWidth = paperSize == 56 ? 24 : 32;
+            
+            // Formatar conteúdo para impressão térmica
+            let printContent = [];
+            
+            // Cabeçalho
+            printContent.push({
+                text: "SUPERMARKET PWA",
+                align: "CENTER",
+                bold: true,
+                width: 2,
+                height: 2
+            });
+            
+            printContent.push({
+                text: `Pedido #${order.id}`,
+                align: "CENTER",
+                bold: true
+            });
+            
+            printContent.push({
+                text: new Date(order.date).toLocaleString('pt-BR'),
+                align: "CENTER"
+            });
+            
+            printContent.push({
+                text: "-".repeat(maxWidth),
+                align: "CENTER"
+            });
+            
+            // Cabeçalho de itens
+            printContent.push({
+                text: "ITEM",
+                align: "LEFT",
+                bold: true
+            });
+            
+            printContent.push({
+                text: "QTD   VALOR   TOTAL",
+                align: "RIGHT"
+            });
+            
+            printContent.push({
+                text: "-".repeat(maxWidth),
+                align: "CENTER"
+            });
+            
+            // Itens do pedido
+            order.items.forEach(item => {
+                const name = this.truncate(item.name, maxWidth - 15);
+                const qty = item.quantity.toString().padStart(2, ' ');
+                const price = item.price.toFixed(2).padStart(6, ' ');
+                const total = (item.price * item.quantity).toFixed(2).padStart(6, ' ');
+                
+                printContent.push({
+                    text: name,
+                    align: "LEFT"
+                });
+                
+                printContent.push({
+                    text: `${qty}x ${price} ${total}`,
+                    align: "RIGHT"
+                });
+            });
+            
+            printContent.push({
+                text: "-".repeat(maxWidth),
+                align: "CENTER"
+            });
+            
+            // Observações do pedido
+            if (order.notes && order.notes.trim() !== '') {
+                const obsLines = this.wrapText(`OBS: ${order.notes}`, maxWidth);
+                obsLines.forEach(line => {
+                    printContent.push({
+                        text: line,
+                        align: "LEFT",
+                        width: 0.8
+                    });
+                });
+            }
+            
+            // Mensagem adicional
+            if (notes.trim() !== '') {
+                const msgLines = this.wrapText(`MSG: ${notes}`, maxWidth);
+                msgLines.forEach(line => {
+                    printContent.push({
+                        text: line,
+                        align: "LEFT",
+                        width: 0.8
+                    });
+                });
+            }
+            
+            // Total
+            printContent.push({
+                text: `TOTAL: R$ ${order.total.toFixed(2)}`,
+                align: "RIGHT",
+                bold: true,
+                width: 2
+            });
+            
+            printContent.push({
+                text: " ",
+                align: "CENTER"
+            });
+            
+            // Rodapé
+            printContent.push({
+                text: "Obrigado pela preferência!",
+                align: "CENTER"
+            });
+            
+            printContent.push({
+                text: " ",
+                align: "CENTER"
+            });
+            
+            // Imprimir
+            await this.printer.printBlob({
+                data: printContent
+            });
+            
+            // Desconectar
+            await this.printer.disconnectPrinter();
+            
+            UI.showToast('Pedido impresso com sucesso!');
+            
+            // Limpar campo de observações após impressão
+            document.getElementById('receiptNotes').value = '';
+            
+        } catch (error) {
+            console.error('Erro na impressão:', error);
+            UI.showToast('Falha na impressão. Verifique a conexão.');
+        }
     }
 
-    shareOrder(orderId) {
-        this.db.getAllOrders().then(orders => {
-            const order = orders.find(o => o.id === orderId);
-            if (order) {
-                // Formatar conteúdo para PDF/WhatsApp
-                let shareContent = `*Pedido #${order.id}*\n`;
-                shareContent += `*Data:* ${new Date(order.date).toLocaleString('pt-BR')}\n\n`;
-                shareContent += "*Itens:*\n";
-
-                order.items.forEach(item => {
-                    shareContent += `- ${item.quantity}x ${item.name}: R$ ${(item.price * item.quantity).toFixed(2)}\n`;
-                });
-                // Adicionar observações se existirem
-                if (order.notes && order.notes.trim() !== '') {
-                    shareContent += `\n*Observações:* ${order.notes}\n`;
-                }
-
-                shareContent += `\n*Total: R$ ${order.total.toFixed(2)}*`;
-                
-
-                // Codificar para URL do WhatsApp
-                const encodedContent = encodeURIComponent(shareContent);
-                const whatsappUrl = `https://wa.me/?text=${encodedContent}`;
-
-                // Abrir WhatsApp
-                window.open(whatsappUrl, '_blank');
+    truncate(str, maxLength) {
+        if (str.length <= maxLength) return str;
+        return str.substring(0, maxLength - 1) + '…';
+    }
+    
+    wrapText(text, maxLength) {
+        const words = text.split(' ');
+        const lines = [];
+        let currentLine = '';
+        
+        words.forEach(word => {
+            if (currentLine.length + word.length + 1 <= maxLength) {
+                currentLine += (currentLine ? ' ' : '') + word;
+            } else {
+                lines.push(currentLine);
+                currentLine = word;
             }
         });
+        
+        if (currentLine) lines.push(currentLine);
+        return lines;
+    }
+
+    async shareOrder(orderId) {
+        try {
+            const orders = await this.db.getAllOrders();
+            const order = orders.find(o => o.id === orderId);
+            
+            if (!order) {
+                UI.showToast('Pedido não encontrado!');
+                return;
+            }
+            
+            // Obter observações do campo de texto
+            const notes = document.getElementById('receiptNotes').value || '';
+            
+            // Formatar conteúdo para compartilhamento
+            let shareContent = `*Pedido #${order.id}*\n`;
+            shareContent += `*Data:* ${new Date(order.date).toLocaleString('pt-BR')}\n\n`;
+            shareContent += "*Itens:*\n";
+            
+            order.items.forEach(item => {
+                shareContent += `- ${item.quantity}x ${item.name}: R$ ${(item.price * item.quantity).toFixed(2)}\n`;
+            });
+            
+            // Adicionar observações do pedido
+            if (order.notes && order.notes.trim() !== '') {
+                shareContent += `\n*Observações:* ${order.notes}\n`;
+            }
+            
+            // Adicionar mensagem adicional
+            if (notes.trim() !== '') {
+                shareContent += `\n*Mensagem:* ${notes}\n`;
+            }
+            
+            shareContent += `\n*Total: R$ ${order.total.toFixed(2)}*`;
+            
+            // Codificar para URL do WhatsApp
+            const encodedContent = encodeURIComponent(shareContent);
+            const whatsappUrl = `https://wa.me/?text=${encodedContent}`;
+            
+            // Abrir WhatsApp
+            window.open(whatsappUrl, '_blank');
+            
+        } catch (error) {
+            console.error('Erro ao compartilhar pedido:', error);
+            UI.showToast('Erro ao compartilhar pedido!');
+        }
     }
 }

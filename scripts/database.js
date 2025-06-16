@@ -125,26 +125,32 @@ class Database {
         });
     }
     
-    getAllOrders() {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['orders'], 'readonly');
-            const store = transaction.objectStore('orders');
-            const request = store.getAll();
-            
-            request.onsuccess = () => {const orders = request.result.sort((a, b) => b.timestamp - a.timestamp);
-                resolve(orders);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
+    
+    // Adicione este método à classe Database
+getAllOrders() {
+    return new Promise((resolve, reject) => {
+        const transaction = this.db.transaction(['orders'], 'readonly');
+        const store = transaction.objectStore('orders');
+        const request = store.getAll();
+        
+        request.onsuccess = () => {
+            // Ordenar por data (mais recente primeiro)
+            const orders = request.result.sort((a, b) => {
+                return new Date(b.date) - new Date(a.date);
+            });
+            resolve(orders);
+        };
+        
+        request.onerror = () => reject(request.error);
+    });
+   
+}
     
     // Utilitários
     getProductIcon(category) {
         const icons = {
             'alimentos': 'bread-slice',
             'bebidas': 'wine-bottle',
-            'limpeza': 'broom',
-            'higiene': 'soap',
             'outros': 'shopping-bag'
         };
         return icons[category] || 'shopping-bag';

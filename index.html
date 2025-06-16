@@ -43,6 +43,7 @@
           <li class="tab active" data-target="products">Produtos</li>
           <li class="tab" data-target="cart">Carrinho</li>
           <li class="tab" data-target="history">Pedidos</li>
+          <li class="tab" data-target="summary">Histórico Geral</li>
         </ul>
       </div>
     </nav>
@@ -83,7 +84,50 @@
         </div>
       </div>
     </div>
-
+    <!-- Summary Screen -->
+    <div class="screen" id="summaryScreen">
+    <h2>Histórico Geral de Pedidos</h2>
+    
+    <div class="summary-stats">
+        <div class="stat-card">
+            <div class="stat-title">Total de Pedidos</div>
+            <div class="stat-value" id="totalOrders">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-title">Valor Total</div>
+            <div class="stat-value" id="totalAmount">R$ 0,00</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-title">Última Exportação</div>
+            <div class="stat-value" id="lastExport">Nunca</div>
+        </div>
+    </div>
+    
+    <div class="summary-actions">
+        <button class="btn" id="exportPdfBtn">
+            <i class="fas fa-file-pdf"></i> Exportar PDF Agora
+        </button>
+        <button class="btn" id="scheduleExportBtn">
+            <i class="fas fa-calendar-check"></i> Agendar Exportação Diária
+        </button>
+    </div>
+    
+    <div class="summary-table">
+        <h3>Resumo por Dia</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Pedidos</th>
+                    <th>Valor Total</th>
+                </tr>
+            </thead>
+            <tbody id="dailySummary">
+                <!-- Resumo diário será preenchido aqui -->
+            </tbody>
+        </table>
+    </div>
+</div>
     <!-- Floating Cart -->
     <div class="floating-cart" id="floatingCart">
       <i class="fas fa-shopping-cart"></i>
@@ -166,12 +210,17 @@
       <span id="toastMessage">Operação realizada com sucesso!</span>
     </div>
 
-    <!-- Scripts -->
-    <script src="scripts/database.js"></script>
-    <script src="scripts/products.js"></script>
-    <script src="scripts/cart.js"></script>
-    <script src="scripts/orders.js"></script>
-    <script src="scripts/ui.js"></script>
-    <script src="scripts/app.js"></script>
+   <!--  -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-native-thermal-receipt-printer@1.0.0/dist/thermal-printer.min.js"></script>
+
+<!--  scripts do app -->
+<script src="scripts/database.js"></script>
+<script src="scripts/products.js"></script>
+<script src="scripts/cart.js"></script>
+<script src="scripts/orders.js"></script>
+<script src="scripts/ui.js"></script>
+<script src="scripts/summary.js"></script> <!-- Novo script -->
+<script src="scripts/app.js"></script>
   </body>
 </html>
