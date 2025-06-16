@@ -12,6 +12,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const orders = new Orders(database);
         const summary = new Summary(database); // Inicializar summary
 
+          // Inicializar sistema de pareamento de impressora
+    const printerPairing = new PrinterPairing();
+    await printerPairing.initialize();
+    
+    // Adicionar botão para abrir o pareamento no header
+    const printerBtn = document.createElement('button');
+    printerBtn.className = 'btn';
+    printerBtn.innerHTML = '<i class="fas fa-print"></i> Impressora';
+    printerBtn.addEventListener('click', () => printerPairing.show());
+    document.querySelector('.actions').appendChild(printerBtn);
+
         // Carregar dados iniciais
         await products.loadProducts();
         await orders.loadOrders();
