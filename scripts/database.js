@@ -114,6 +114,8 @@ class Database {
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['orders'], 'readwrite');
             const store = transaction.objectStore('orders');
+             // Garantir que observações existam mesmo quando vazias
+            order.notes = order.notes || '';
              // Adicionar timestamp para ordenação
             order.timestamp = new Date().getTime();
             const request = store.add(order);
