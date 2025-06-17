@@ -63,7 +63,7 @@ class Orders {
     }
 
    
-      async printOrder(orderId) {
+       async printOrder(orderId) {
         try {
             const orders = await this.db.getAllOrders();
             const order = orders.find(o => o.id === orderId);
@@ -73,10 +73,14 @@ class Orders {
                 return;
             }
             
-            // Obter observações do campo de texto
-            const notes = document.getElementById('receiptNotes').value || '';
+            // Obter observações de forma segura
+            let notes = '';
+            const notesElement = document.getElementById('receiptNotes');
+            if (notesElement) {
+                notes = notesElement.value || '';
+            }
             
-            // Obter impressora configurada
+            // Obter configuração salva ou usar padrão
             const savedPrinter = localStorage.getItem('selectedPrinter');
             const paperSize = localStorage.getItem('paperSize') || 80;
             
@@ -220,8 +224,10 @@ class Orders {
             
             UI.showToast('Pedido impresso com sucesso!');
             
-            // Limpar campo de observações após impressão
-            document.getElementById('receiptNotes').value = '';
+            // Limpar campo de observações se existir
+            if (notesElement) {
+                notesElement.value = '';
+            }
             
         } catch (error) {
             console.error('Erro na impressão:', error);
@@ -262,8 +268,12 @@ class Orders {
                 return;
             }
             
-            // Obter observações do campo de texto
-            const notes = document.getElementById('receiptNotes').value || '';
+            // Obter observações de forma segura
+            let notes = '';
+            const notesElement = document.getElementById('receiptNotes');
+            if (notesElement) {
+                notes = notesElement.value || '';
+            }
             
             // Formatar conteúdo para compartilhamento
             let shareContent = `*Pedido #${order.id}*\n`;
