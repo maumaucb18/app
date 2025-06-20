@@ -3,6 +3,7 @@ class Orders {
     constructor(database) {
         this.db = database;
         this.printer = window.ThermalPrinter;
+        this.currentOrderId = null; // Para armazenar o ID durante tentativas
     }
 
     async loadOrders() {
@@ -62,14 +63,16 @@ class Orders {
         });
     }
 
-   
-       async printOrder(orderId) {
+    async printOrder(orderId) {
+        this.currentOrderId = orderId; // Armazena para retentativas
+        
         try {
+            // Obter o pedido
             const orders = await this.db.getAllOrders();
             const order = orders.find(o => o.id === orderId);
             
             if (!order) {
-                UI.showToast('Pedido não encontrado!');
+                UI.showToast('Pedido não encontrado!', 'error');
                 return;
             }
             
@@ -80,164 +83,196 @@ class Orders {
                 notes = notesElement.value || '';
             }
             
-            // Obter configuração salva ou usar padrão
+            // Obter configuração salva
             const savedPrinter = localStorage.getItem('selectedPrinter');
             const paperSize = localStorage.getItem('paperSize') || 80;
             
             if (!savedPrinter) {
-                UI.showToast('Configure uma impressora primeiro!');
+                UI.showToast('Configure uma impressora primeiro!', 'error');
                 return;
             }
             
-            // Conectar à impressora Bluetooth
-            await this.printer.connectPrinter(savedPrinter);
+            // 1. Verificar permissões Bluetooth
+            if (!await this.checkBluetoothPermissions()) {
+                return;
+            }
+            
+            // 2. Tentar conexão com timeout
+            UI.showToast('Conectando à impressora...', 'info');
+            await this.connectWithTimeout(savedPrinter, 15000); // 15 segundos
+            
+            // 3. Verificar conexão
+            const isConnected = await this.printer.isConnected();
+            if (!isConnected) {
+                throw new Error('Falha na conexão após timeout');
+            }
             
             // Configurar papel
             this.printer.setPaperSize(parseInt(paperSize));
-            
-            // Determinar largura máxima baseada no papel
             const maxWidth = paperSize == 56 ? 24 : 32;
             
-            // Formatar conteúdo para impressão térmica
-            let printContent = [];
+            // Formatar conteúdo
+            let printContent = this.formatReceiptContent(order, notes, maxWidth);
             
-            // Cabeçalho
-            printContent.push({
-                text: "SUPERMARKET PWA",
-                align: "CENTER",
-                bold: true,
-                width: 2,
-                height: 2
-            });
+            // 4. Imprimir
+            await this.printer.printBlob({ data: printContent });
+            UI.showToast('Pedido impresso com sucesso!', 'success');
             
-            printContent.push({
-                text: `Pedido #${order.id}`,
-                align: "CENTER",
-                bold: true
-            });
-            
-            printContent.push({
-                text: new Date(order.date).toLocaleString('pt-BR'),
-                align: "CENTER"
-            });
-            
-            printContent.push({
-                text: "-".repeat(maxWidth),
-                align: "CENTER"
-            });
-            
-            // Cabeçalho de itens
-            printContent.push({
-                text: "ITEM",
-                align: "LEFT",
-                bold: true
-            });
-            
-            printContent.push({
-                text: "QTD   VALOR   TOTAL",
-                align: "RIGHT"
-            });
-            
-            printContent.push({
-                text: "-".repeat(maxWidth),
-                align: "CENTER"
-            });
-            
-            // Itens do pedido
-            order.items.forEach(item => {
-                const name = this.truncate(item.name, maxWidth - 15);
-                const qty = item.quantity.toString().padStart(2, ' ');
-                const price = item.price.toFixed(2).padStart(6, ' ');
-                const total = (item.price * item.quantity).toFixed(2).padStart(6, ' ');
-                
-                printContent.push({
-                    text: name,
-                    align: "LEFT"
-                });
-                
-                printContent.push({
-                    text: `${qty}x ${price} ${total}`,
-                    align: "RIGHT"
-                });
-            });
-            
-            printContent.push({
-                text: "-".repeat(maxWidth),
-                align: "CENTER"
-            });
-            
-            // Observações do pedido
-            if (order.notes && order.notes.trim() !== '') {
-                const obsLines = this.wrapText(`OBS: ${order.notes}`, maxWidth);
-                obsLines.forEach(line => {
-                    printContent.push({
-                        text: line,
-                        align: "LEFT",
-                        width: 0.8
-                    });
-                });
-            }
-            
-            // Mensagem adicional
-            if (notes.trim() !== '') {
-                const msgLines = this.wrapText(`MSG: ${notes}`, maxWidth);
-                msgLines.forEach(line => {
-                    printContent.push({
-                        text: line,
-                        align: "LEFT",
-                        width: 0.8
-                    });
-                });
-            }
-            
-            // Total
-            printContent.push({
-                text: `TOTAL: R$ ${order.total.toFixed(2)}`,
-                align: "RIGHT",
-                bold: true,
-                width: 2
-            });
-            
-            printContent.push({
-                text: " ",
-                align: "CENTER"
-            });
-            
-            // Rodapé
-            printContent.push({
-                text: "Obrigado pela preferência!",
-                align: "CENTER"
-            });
-            
-            printContent.push({
-                text: " ",
-                align: "CENTER"
-            });
-            
-            // Imprimir
-            await this.printer.printBlob({
-                data: printContent
-            });
-            
-            // Desconectar
-            await this.printer.disconnectPrinter();
-            
-            UI.showToast('Pedido impresso com sucesso!');
-            
-            // Limpar campo de observações se existir
-            if (notesElement) {
-                notesElement.value = '';
-            }
+            // Limpar campo de observações
+            if (notesElement) notesElement.value = '';
             
         } catch (error) {
             console.error('Erro na impressão:', error);
-            UI.showToast('Falha na impressão. Verifique a conexão.');
+            this.handlePrintError(error);
+        } finally {
+            // 5. Sempre desconectar
+            try {
+                await this.printer.disconnectPrinter();
+            } catch (e) {
+                console.warn('Erro ao desconectar:', e);
+            }
         }
     }
 
+    formatReceiptContent(order, notes, maxWidth) {
+        let content = [];
+        
+        // Cabeçalho
+        content.push({ text: "SUPERMARKET PWA", align: "CENTER", bold: true, width: 2, height: 2 });
+        content.push({ text: `Pedido #${order.id}`, align: "CENTER", bold: true });
+        content.push({ text: new Date(order.date).toLocaleString('pt-BR'), align: "CENTER" });
+        content.push({ text: "-".repeat(maxWidth), align: "CENTER" });
+        
+        // Itens
+        content.push({ text: "ITEM", align: "LEFT", bold: true });
+        content.push({ text: "QTD   VALOR   TOTAL", align: "RIGHT" });
+        content.push({ text: "-".repeat(maxWidth), align: "CENTER" });
+        
+        order.items.forEach(item => {
+            const name = this.truncate(item.name, maxWidth - 15);
+            const qty = item.quantity.toString().padStart(2, ' ');
+            const price = item.price.toFixed(2).padStart(6, ' ');
+            const total = (item.price * item.quantity).toFixed(2).padStart(6, ' ');
+            
+            content.push({ text: name, align: "LEFT" });
+            content.push({ text: `${qty}x ${price} ${total}`, align: "RIGHT" });
+        });
+        
+        content.push({ text: "-".repeat(maxWidth), align: "CENTER" });
+        
+        // Observações
+        if (order.notes && order.notes.trim() !== '') {
+            this.wrapText(`OBS: ${order.notes}`, maxWidth).forEach(line => {
+                content.push({ text: line, align: "LEFT", width: 0.8 });
+            });
+        }
+        
+        // Mensagem adicional
+        if (notes.trim() !== '') {
+            this.wrapText(`MSG: ${notes}`, maxWidth).forEach(line => {
+                content.push({ text: line, align: "LEFT", width: 0.8 });
+            });
+        }
+        
+        // Total
+        content.push({ text: `TOTAL: R$ ${order.total.toFixed(2)}`, align: "RIGHT", bold: true, width: 2 });
+        content.push({ text: " ", align: "CENTER" });
+        content.push({ text: "Obrigado pela preferência!", align: "CENTER" });
+        content.push({ text: " ", align: "CENTER" });
+        
+        return content;
+    }
+
+    async checkBluetoothPermissions() {
+        try {
+            // Verificar suporte a Bluetooth
+            if (!navigator.bluetooth) {
+                UI.showToast('Bluetooth não suportado neste navegador!', 'error');
+                return false;
+            }
+
+            // Verificar permissões (não disponível em todos os navegadores)
+            if (navigator.permissions && navigator.permissions.query) {
+                const permission = await navigator.permissions.query({ name: 'bluetooth' });
+                if (permission.state === 'denied') {
+                    UI.showToast('Permissão Bluetooth negada!', 'error');
+                    return false;
+                }
+            }
+            
+            return true;
+        } catch (e) {
+            console.error('Erro nas permissões:', e);
+            UI.showToast('Erro ao verificar permissões Bluetooth', 'error');
+            return false;
+        }
+    }
+
+    async connectWithTimeout(deviceId, timeoutMs) {
+        return new Promise(async (resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('Timeout: Impressora não respondeu'));
+            }, timeoutMs);
+
+            try {
+                await this.printer.connectPrinter(deviceId);
+                clearTimeout(timeout);
+                resolve();
+            } catch (error) {
+                clearTimeout(timeout);
+                reject(error);
+            }
+        });
+    }
+
+    handlePrintError(error) {
+        let message = 'Erro desconhecido';
+        
+        if (error.message.includes('Timeout')) {
+            message = 'Impressora não encontrada! Verifique:';
+        } else if (error.message.includes('permission')) {
+            message = 'Permissão Bluetooth necessária!';
+        } else if (error.message.includes('connect')) {
+            message = 'Falha na conexão Bluetooth!';
+        } else {
+            message = `Erro: ${error.message}`;
+        }
+
+        UI.showToast(message, 'error');
+        
+        // Mostrar modal de ajuda
+        UI.showModal(`
+            <div class="print-error-modal">
+                <h3>Solução de Problemas</h3>
+                <ol>
+                    <li>✅ Verifique se a impressora está ligada</li>
+                    <li>✅ Ative o Bluetooth no dispositivo</li>
+                    <li>✅ Aproxime-se da impressora</li>
+                    <li>✅ Repareie se necessário</li>
+                </ol>
+                
+                <div class="button-group">
+                    <button id="retryPrint" class="btn primary">Tentar Novamente</button>
+                    <button id="configurePrinter" class="btn secondary">Configurar Impressora</button>
+                </div>
+            </div>
+        `);
+        
+        // Configurar eventos dos botões
+        document.getElementById('retryPrint')?.addEventListener('click', () => {
+            UI.closeModal();
+            if (this.currentOrderId) this.printOrder(this.currentOrderId);
+        });
+        
+        document.getElementById('configurePrinter')?.addEventListener('click', () => {
+            UI.closeModal();
+            window.router.navigate('/settings'); // Supondo que existe rota para configurações
+        });
+    }
+
+    // Métodos auxiliares
     truncate(str, maxLength) {
-        if (str.length <= maxLength) return str;
-        return str.substring(0, maxLength - 1) + '…';
+        return str.length <= maxLength ? str : str.substring(0, maxLength - 1) + '…';
     }
     
     wrapText(text, maxLength) {
@@ -264,7 +299,7 @@ class Orders {
             const order = orders.find(o => o.id === orderId);
             
             if (!order) {
-                UI.showToast('Pedido não encontrado!');
+                UI.showToast('Pedido não encontrado!', 'error');
                 return;
             }
             
@@ -305,7 +340,7 @@ class Orders {
             
         } catch (error) {
             console.error('Erro ao compartilhar pedido:', error);
-            UI.showToast('Erro ao compartilhar pedido!');
+            UI.showToast('Erro ao compartilhar pedido!', 'error');
         }
     }
 }
