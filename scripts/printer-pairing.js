@@ -149,57 +149,30 @@ class PrinterPairing {
 
     // Buscar impressoras Bluetooth disponíveis
     async scanPrinters() {
-        const devicesContainer = this.container.querySelector('.devices-container');
-        const loadingSpinner = this.container.querySelector('.loading-spinner');
-        const scanBtn = this.container.querySelector('.scan-btn');
-        
-        // Mostrar spinner de carregamento
-        loadingSpinner.style.display = 'flex';
-        scanBtn.disabled = true;
-        devicesContainer.innerHTML = '';
-        
         try {
-            const devices = await this.printer.getBluetoothDeviceList();
-            
-            if (devices.length === 0) {
-                devicesContainer.innerHTML = '<p class="empty-message">Nenhuma impressora encontrada</p>';
-                return;
+            // Solicitar permissão Bluetooth
+            const available = await navigator.bluetooth.getAvailability();
+            if (!available) {
+                throw new Error('Bluetooth não disponível');
             }
-            
-            devicesContainer.innerHTML = '';
-            devices.forEach(device => {
-                const deviceEl = document.createElement('div');
-                deviceEl.className = 'printer-device';
-                deviceEl.innerHTML = `
-                    <div class="device-info">
-                        <i class="fas fa-print"></i>
-                        <div>
-                            <div class="device-name">${device.device_name}</div>
-                            <div class="device-mac">${device.inner_mac_address}</div>
-                        </div>
-                    </div>
-                    <button class="btn connect-btn">Conectar</button>
-                `;
-                
-                deviceEl.querySelector('.connect-btn').addEventListener('click', async () => {
-                    try {
-                        await this.connectPrinter(device);
-                        this.selectedPrinter = device;
-                        this.updateStatus();
-                    } catch (error) {
-                        console.error('Erro ao conectar:', error);
-                        alert('Falha na conexão. Verifique se a impressora está ligada e disponível.');
-                    }
-                });
-                
-                devicesContainer.appendChild(deviceEl);
+
+            // Procurar dispositivos
+            const device = await navigator.bluetooth.requestDevice({
+                filters: [{ namePrefix: 'Printer' }],
+                optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
             });
+
+            if (device) {
+                this.selectedPrinter = {
+                    device_name: device.name,
+                    inner_mac_address: device.id
+                };
+                await this.printerManager.connect(device);
+                this.updateStatus();
+            }
         } catch (error) {
             console.error('Erro ao buscar impressoras:', error);
-            devicesContainer.innerHTML = '<p class="error-message">Erro ao buscar impressoras. Verifique se o Bluetooth está ativado.</p>';
-        } finally {
-            loadingSpinner.style.display = 'none';
-            scanBtn.disabled = false;
+            this.showError('Verifique se o Bluetooth está ativado e tente novamente');
         }
     }
 

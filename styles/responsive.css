@@ -1,75 +1,84 @@
-/* Responsividade */
+
+
+/* Header responsivo */
+.header-content {
+    flex-wrap: wrap;
+}
+
 @media (max-width: 768px) {
-    .logo h1 {
-        font-size: 1.2rem;
+    .header-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .logo {
+        width: 100%;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+    
+    .actions {
+        width: 100%;
+        justify-content: space-between;
     }
     
     .btn span {
-        display: none;
+        display: inline !important;
+        font-size: 0.9rem;
+    }
+}
+
+/* Botões responsivos */
+@media (max-width: 480px) {
+    .btn {
+        padding: 8px 12px;
+        font-size: 0.8rem;
     }
     
     .btn i {
-        margin-right: 0;
+        margin-right: 3px;
     }
-    
+}
+
+/* Grid de produtos responsivo */
+.products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+@media (max-width: 360px) {
     .products-grid {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     }
 }
 
-@media (max-width: 480px) {
-    .logo h1 {
-        font-size: 1.1rem;
-    }
-    
-    .products-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .tabs {
-        font-size: 0.9rem;
-    }
-    
-    .tab {
-        padding: 8px 5px;
-    }
-    
-    .cart-item {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .cart-item-actions {
-        width: 100%;
-        margin-top: 10px;
-        justify-content: space-between;
-    }
-    
-    .order-actions {
-        flex-direction: column;
-        gap: 10px;
-    }
-    
-    .action-button {
-        width: 100%;
-        margin-right: 0 !important;
-    }
-    .btn-delete {
-    background: var(--danger);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
+/* Carrinho responsivo */
+.cart-item {
+    flex-wrap: wrap;
 }
 
-/* Atualize o modal-footer para espaço entre os botões */
-.modal-footer {
-    padding: 15px 20px;
-    background: #f9f9f9;
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
+.cart-item-image {
+    margin-bottom: 10px;
 }
+
+.cart-item-details {
+    min-width: 60%;
+}
+
+.cart-item-actions {
+    width: 100%;
+    margin-top: 10px;
+    justify-content: space-between;
+}
+
+/* Modal responsivo */
+.modal-content {
+    width: 95%;
+    max-width: 95%;
+}
+
+@media (min-width: 768px) {
+    .modal-content {
+        width: 80%;
+        max-width: 500px;
+    }
 }

@@ -64,10 +64,8 @@ class Orders {
     }
 
     async printOrder(orderId) {
-        this.currentOrderId = orderId; // Armazena para retentativas
-        
         try {
-            // Obter o pedido
+            // Obter pedido
             const orders = await this.db.getAllOrders();
             const order = orders.find(o => o.id === orderId);
             
@@ -76,63 +74,37 @@ class Orders {
                 return;
             }
             
-            // Obter observações de forma segura
-            let notes = '';
-            const notesElement = document.getElementById('receiptNotes');
-            if (notesElement) {
-                notes = notesElement.value || '';
-            }
-            
             // Obter configuração salva
             const savedPrinter = localStorage.getItem('selectedPrinter');
-            const paperSize = localStorage.getItem('paperSize') || 80;
             
             if (!savedPrinter) {
                 UI.showToast('Configure uma impressora primeiro!', 'error');
                 return;
             }
             
-            // 1. Verificar permissões Bluetooth
-            if (!await this.checkBluetoothPermissions()) {
-                return;
-            }
+            // Conectar à impressora
+            const printer = new PrinterManager();
+            const device = await this.getBluetoothDevice(savedPrinter);
+            await printer.connect(device);
             
-            // 2. Tentar conexão com timeout
-            UI.showToast('Conectando à impressora...', 'info');
-            await this.connectWithTimeout(savedPrinter, 15000); // 15 segundos
+            // Formatar e imprimir
+            const content = this.formatReceiptContent(order, printer.paperSize);
+            await printer.print(content);
             
-            // 3. Verificar conexão
-            const isConnected = await this.printer.isConnected();
-            if (!isConnected) {
-                throw new Error('Falha na conexão após timeout');
-            }
-            
-            // Configurar papel
-            this.printer.setPaperSize(parseInt(paperSize));
-            const maxWidth = paperSize == 56 ? 24 : 32;
-            
-            // Formatar conteúdo
-            let printContent = this.formatReceiptContent(order, notes, maxWidth);
-            
-            // 4. Imprimir
-            await this.printer.printBlob({ data: printContent });
             UI.showToast('Pedido impresso com sucesso!', 'success');
-            
-            // Limpar campo de observações
-            if (notesElement) notesElement.value = '';
-            
         } catch (error) {
             console.error('Erro na impressão:', error);
-            this.handlePrintError(error);
-        } finally {
-            // 5. Sempre desconectar
-            try {
-                await this.printer.disconnectPrinter();
-            } catch (e) {
-                console.warn('Erro ao desconectar:', e);
-            }
+            UI.showToast(`Erro: ${error.message}`, 'error');
         }
     }
+
+    async getBluetoothDevice(savedPrinter) {
+        return await navigator.bluetooth.requestDevice({
+            filters: [{ name: savedPrinter.device_name }],
+            optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+        });
+    }
+
 
     formatReceiptContent(order, notes, maxWidth) {
         let content = [];

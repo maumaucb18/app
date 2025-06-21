@@ -1,91 +1,66 @@
+
 class PrinterManager {
     constructor() {
-        this.printer = window.ThermalPrinter;
+        this.device = null;
+        this.characteristic = null;
         this.paperSize = 80; // Padrão 80mm
     }
-    
-    async detectPrinters() {
-        try {
-            const devices = await this.printer.getBluetoothDeviceList();
-            return devices;
-        } catch (error) {
-            console.error('Erro ao detectar impressoras:', error);
-            return [];
-        }
-    }
-    
+
     async connect(device) {
         try {
-            await this.printer.connectPrinter(device.inner_mac_address);
+            this.device = device;
+            const server = await device.gatt.connect();
+            const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+            this.characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
             return true;
         } catch (error) {
-            console.error('Erro ao conectar:', error);
+            console.error('Erro na conexão:', error);
             return false;
         }
     }
-    
+
+    async print(content) {
+        if (!this.characteristic) {
+            throw new Error('Não conectado a uma impressora');
+        }
+
+        // Converter conteúdo para ArrayBuffer
+        const encoder = new TextEncoder();
+        const data = encoder.encode(content);
+        await this.characteristic.writeValue(data);
+    }
+
     async disconnect() {
-        try {
-            await this.printer.disconnectPrinter();
-            return true;
-        } catch (error) {
-            console.error('Erro ao desconectar:', error);
-            return false;
+        if (this.device && this.device.gatt.connected) {
+            await this.device.gatt.disconnect();
         }
     }
-    
-    setPaperSize(size) {
-        this.paperSize = size;
-        this.printer.setPaperSize(size);
-    }
-    
+
     async printTestPage() {
-        try {
-            const content = [
-                {
-                    text: "TESTE DE IMPRESSÃO",
-                    align: "CENTER",
-                    bold: true,
-                    width: 2
-                },
-                {
-                    text: "--------------------------------",
-                    align: "CENTER"
-                },
-                {
-                    text: "Esta é uma página de teste",
-                    align: "CENTER"
-                },
-                {
-                    text: "para verificar a conexão",
-                    align: "CENTER"
-                },
-                {
-                    text: `Papel: ${this.paperSize}mm`,
-                    align: "CENTER"
-                },
-                {
-                    text: " ",
-                    align: "CENTER"
-                },
-                {
-                    text: "SuperMarket PWA",
-                    align: "CENTER"
-                },
-                {
-                    text: new Date().toLocaleString('pt-BR'),
-                    align: "CENTER"
-                }
-            ];
-            
-            await this.printer.printBlob({
-                data: content
-            });
-            
-            return true;
-        } catch (error) {
-            console.error('Erro na impressão:', error);
-            return false;
-        }
+        const maxWidth = this.paperSize === 56 ? 24 : 32;
+        const content = this.formatTestContent(maxWidth);
+        await this.print(content);
+    }
+
+    formatTestContent(maxWidth) {
+        return [
+            "TESTE DE IMPRESSÃO".padCenter(maxWidth),
+            "-".repeat(maxWidth),
+            "Esta é uma página de teste".padCenter(maxWidth),
+            "para verificar a conexão".padCenter(maxWidth),
+            `Papel: ${this.paperSize}mm`.padCenter(maxWidth),
+            " ",
+            "SuperMarket PWA".padCenter(maxWidth),
+            new Date().toLocaleString('pt-BR').padCenter(maxWidth),
+            "\n\n\n" // Comandos para cortar papel
+        ].join("\n");
     }
 }
+
+// Extensão para centralizar texto
+String.prototype.padCenter = function (width) {
+    const padding = Math.max(0, width - this.length);
+    const leftPad = Math.floor(padding / 2);
+    const rightPad = padding - leftPad;
+    return ' '.repeat(leftPad) + this + ' '.repeat(rightPad);
+};
